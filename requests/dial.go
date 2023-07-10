@@ -542,9 +542,6 @@ func (obj *DialClient) requestHttpDialContext(ctx context.Context, network strin
 	if reqData.url == nil {
 		return nil, tools.WrapError(ErrFatal, "not found reqData.url")
 	}
-	if reqData.rawAddr != "" { //还原addr
-		addr, reqData.rawAddr = reqData.rawAddr, ""
-	}
 	var nowProxy *url.URL
 	if reqData.disProxy || reqData.isCallback { //走正常连接
 		if conn, err = obj.DialContext(ctx, network, addr); err != nil {

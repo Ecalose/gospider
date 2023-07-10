@@ -142,14 +142,6 @@ func NewClient(preCtx context.Context, options ...ClientOption) (*Client, error)
 			if ctxData.host == "" {
 				ctxData.host = ctxData.url.Host
 			}
-			if r.URL.Host == ctxData.rawMd5 {
-				r.URL.Host = ctxData.rawHost
-			}
-			if referer, err := url.Parse(r.Header.Get("Referer")); err == nil && referer.Host == ctxData.rawMd5 {
-				referer.Host = ctxData.rawHost
-				r.Header.Set("Referer", referer.String())
-			}
-
 			if ctxData.requestCallBack != nil {
 				req, err := cloneRequest(r, ctxData.disBody)
 				if err != nil {

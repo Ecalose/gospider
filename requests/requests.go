@@ -7,7 +7,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"net"
 
 	"net/http"
 	"net/url"
@@ -159,9 +158,6 @@ type reqCtxData struct {
 	proxy            *url.URL
 	url              *url.URL
 	host             string
-	rawAddr          string
-	rawHost          string
-	rawMd5           string
 	redirectNum      int
 	disProxy         bool
 	ws               bool
@@ -381,20 +377,6 @@ func (obj *Client) request(preCtx context.Context, option RequestOption) (respon
 	var err2 error
 	if ctxData.ws {
 		websocket.SetClientHeaders(reqs.Header, option.WsOption)
-	}
-	// ja3相关处理
-	if !ctxData.disProxy && ctxData.proxy != nil { //修改host,addr
-		rawPort := reqs.URL.Port()
-		if rawPort == "" {
-			if reqs.URL.Scheme == "https" {
-				rawPort = "443"
-			} else {
-				rawPort = "80"
-			}
-		}
-		rawAddr := net.JoinHostPort(reqs.URL.Hostname(), rawPort)
-		ctxData.rawMd5 = tools.Hex(tools.Md5(fmt.Sprintf("%s::%s", ctxData.proxy.Hostname(), rawAddr)))
-		ctxData.rawAddr, ctxData.rawHost, reqs.URL.Host = rawAddr, reqs.URL.Host, ctxData.rawMd5
 	}
 	r, err = obj.getClient(option).Do(reqs)
 	if r != nil {
