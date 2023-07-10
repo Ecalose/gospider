@@ -24,11 +24,20 @@ import (
 func ReadRequest(b *bufio.Reader) (*http.Request, error)
 
 type RequestDebug struct {
+	Proto  string
 	Url    *url.URL
 	Method string
 	Header http.Header
-	Proto  string
 	con    *bytes.Buffer
+}
+type ResponseDebug struct {
+	Proto   string
+	Url     *url.URL
+	Method  string
+	Header  http.Header
+	con     *bytes.Buffer
+	request *http.Request
+	Status  string
 }
 
 func (obj *RequestDebug) request() (*http.Request, error) {
@@ -83,14 +92,6 @@ func cloneRequest(r *http.Request, disBody bool) (*RequestDebug, error) {
 	return request, err
 }
 
-type ResponseDebug struct {
-	Proto   string
-	Status  string
-	Header  http.Header
-	con     *bytes.Buffer
-	request *http.Request
-}
-
 func (obj *ResponseDebug) response() (*http.Response, error) {
 	return http.ReadResponse(bufio.NewReader(bytes.NewBuffer(obj.con.Bytes())), obj.request)
 }
@@ -119,6 +120,8 @@ func (obj *ResponseDebug) Body() (*bytes.Buffer, error) {
 func cloneResponse(r *http.Response, disBody bool) (*ResponseDebug, error) {
 	response := new(ResponseDebug)
 	response.con = bytes.NewBuffer(nil)
+	response.Url = r.Request.URL
+	response.Method = r.Request.Method
 	response.Proto = r.Proto
 	response.Status = r.Status
 	response.Header = r.Header
