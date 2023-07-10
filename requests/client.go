@@ -151,7 +151,13 @@ func NewClient(preCtx context.Context, options ...ClientOption) (*Client, error)
 					return nil, err
 				}
 			}
-			return nil, nil
+			if option.Ja3 || ctxData.disProxy { //ja3 或 关闭代理，走自实现代理
+				return nil, nil
+			}
+			if ctxData.proxy != nil { //走官方代理
+				ctxData.isRawConn = true
+			}
+			return ctxData.proxy, nil
 		},
 	}
 	var http2Upg *http2.Upg

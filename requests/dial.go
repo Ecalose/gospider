@@ -543,7 +543,7 @@ func (obj *DialClient) requestHttpDialContext(ctx context.Context, network strin
 		return nil, tools.WrapError(ErrFatal, "not found reqData.url")
 	}
 	var nowProxy *url.URL
-	if reqData.disProxy || reqData.isCallback { //走正常连接
+	if reqData.disProxy || reqData.isRawConn { //如果强制关闭代理，或强制走官方代理
 		if conn, err = obj.DialContext(ctx, network, addr); err != nil {
 			err = tools.WrapError(err, "requestHttpDialContext DialContext 错误")
 		}

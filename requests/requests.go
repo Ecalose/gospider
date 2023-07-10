@@ -154,7 +154,7 @@ var (
 )
 
 type reqCtxData struct {
-	isCallback       bool
+	isRawConn        bool
 	proxy            *url.URL
 	url              *url.URL
 	host             string
