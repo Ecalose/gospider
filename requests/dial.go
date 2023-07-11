@@ -31,7 +31,6 @@ type DialClient struct {
 	proxyJa3Spec ja3.ClientHelloSpec
 	ja3          bool //是否启用ja3
 	ja3Spec      ja3.ClientHelloSpec
-	dns          string //dns
 	resolver     *net.Resolver
 	ctx          context.Context
 }
@@ -52,15 +51,14 @@ type DialOption struct {
 	DnsCacheTime        time.Duration
 	KeepAlive           time.Duration
 	GetProxy            func(ctx context.Context, url *url.URL) (string, error)
-	Proxy               string   //代理
-	LocalAddr           string   //使用本地网卡
-	AddrType            AddrType //优先使用的地址类型,ipv4,ipv6 ,或自动选项
+	Proxy               string       //代理
+	LocalAddr           *net.TCPAddr //使用本地网卡
+	AddrType            AddrType     //优先使用的地址类型,ipv4,ipv6 ,或自动选项
 	GetAddrType         func(string) AddrType
 	Ja3                 bool                //是否启用ja3
 	Ja3Spec             ja3.ClientHelloSpec //指定ja3Spec,使用ja3.CreateSpecWithStr 或者ja3.CreateSpecWithId 生成
 	ProxyJa3            bool                //代理是否启用ja3
 	ProxyJa3Spec        ja3.ClientHelloSpec //指定代理ja3Spec,使用ja3.CreateSpecWithStr 或者ja3.CreateSpecWithId 生成
-	Dns                 string              //dns
 }
 
 func NewDail(ctx context.Context, option DialOption) (*DialClient, error) {
@@ -97,24 +95,14 @@ func NewDail(ctx context.Context, option DialOption) (*DialClient, error) {
 		proxyJa3Spec: option.ProxyJa3Spec,
 		ja3:          option.Ja3,
 		ja3Spec:      option.Ja3Spec,
-		dns:          option.Dns,
 	}
-	dialCli.resolver = &net.Resolver{
-		Dial: dialCli.DnsDialContext,
-	}
-
 	if option.Proxy != "" {
 		if dialCli.proxy, err = verifyProxy(option.Proxy); err != nil {
 			return dialCli, err
 		}
 	}
-	if option.LocalAddr != "" {
-		if !strings.Contains(option.LocalAddr, ":") {
-			option.LocalAddr += ":0"
-		}
-		if dialCli.dialer.LocalAddr, err = net.ResolveTCPAddr("tcp", option.LocalAddr); err != nil {
-			return dialCli, err
-		}
+	if option.LocalAddr != nil {
+		dialCli.dialer.LocalAddr = option.LocalAddr
 	}
 	return dialCli, err
 }
@@ -319,16 +307,6 @@ func (obj *DialClient) clientVerifySocks5(ctx context.Context, proxyUrl *url.URL
 func cloneUrl(u *url.URL) *url.URL {
 	r := *u
 	return &r
-}
-func (obj *DialClient) DnsDialContext(ctx context.Context, netword string, addr string) (net.Conn, error) {
-	if obj.dns != "" {
-		if strings.Contains(obj.dns, ":") {
-			addr = obj.dns
-		} else {
-			addr = net.JoinHostPort(obj.dns, "53")
-		}
-	}
-	return obj.dialer.DialContext(ctx, netword, addr)
 }
 func (obj *DialClient) lookupIPAddr(ctx context.Context, host string) (net.IP, error) {
 	var addrType int

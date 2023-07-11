@@ -3,6 +3,7 @@ package requests
 import (
 	"context"
 	"crypto/tls"
+	"net"
 	"net/http"
 	"net/http/cookiejar"
 	"net/url"
@@ -19,7 +20,7 @@ type ClientOption struct {
 	ResponseHeaderTimeout time.Duration                                           //第一个response headers 接收超时时间,default:30
 	DisCookie             bool                                                    //关闭cookies管理
 	DisCompression        bool                                                    //关闭请求头中的压缩功能
-	LocalAddr             string                                                  //本地网卡出口ip
+	LocalAddr             *net.TCPAddr                                            //本地网卡出口ip
 	IdleConnTimeout       time.Duration                                           //空闲连接在连接池中的超时时间,default:90
 	KeepAlive             time.Duration                                           //keepalive保活检测定时,default:30
 	DnsCacheTime          time.Duration                                           //dns解析缓存时间60*30
@@ -109,7 +110,6 @@ func NewClient(preCtx context.Context, options ...ClientOption) (*Client, error)
 		LocalAddr:           option.LocalAddr,
 		AddrType:            option.AddrType,
 		GetAddrType:         option.GetAddrType,
-		Dns:                 option.Dns,
 	})
 	if err != nil {
 		cnl()
