@@ -522,6 +522,7 @@ type ClearOption struct {
 	Bar            bool           //是否开启进度条
 	BatchSize      int32          //服务器每批次多少
 	ClearBatchSize int64          //每次清洗的批次
+	Debug          bool           //是否开启debug
 }
 type ClearOplogOption struct {
 	Thread    int64          //线程数量
@@ -530,6 +531,7 @@ type ClearOplogOption struct {
 	Show      map[string]int //展示的字段
 	Filter    map[string]any //查询参数
 	BatchSize int32          //服务器每批次多少
+	Debug     bool           //是否开启debug
 }
 
 // 清洗oplog集合
@@ -575,6 +577,7 @@ func (obj *Client) ClearOplog(preCctx context.Context, Func func(context.Context
 	var lastOid Timestamp
 	taskMap := kinds.NewSet[ObjectID]()
 	pool := thread.NewClient(pre_ctx, clearOption.Thread, thread.ClientOption{
+		Debug: clearOption.Debug,
 		TaskCallBack: func(t *thread.Task) error {
 			cur++
 			if t.Error != nil {
@@ -717,6 +720,7 @@ func (obj *Table) clearTable(preCtx context.Context, Func any, tag string, clear
 	var lastOid ObjectID
 	bar := bar.NewClient(barTotal, bar.ClientOption{Cur: barCur})
 	pool := thread.NewClient(pre_ctx, clearOption.Thread, thread.ClientOption{
+		Debug: clearOption.Debug,
 		TaskCallBack: func(t *thread.Task) error {
 			if t.Error != nil {
 				return t.Error

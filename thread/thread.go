@@ -280,6 +280,7 @@ func GetThreadId(ctx context.Context) int64 { //获取线程id，获取失败返
 	return 0
 }
 func (obj *Client[T]) run(task *Task, option T, threadId int64) {
+	defer task.cnl() //函数结束，任务完成
 	defer func() {
 		if r := recover(); r != nil {
 			task.Error = fmt.Errorf("%v", r)
@@ -292,7 +293,6 @@ func (obj *Client[T]) run(task *Task, option T, threadId int64) {
 	if timeOut > 0 {
 		task.ctx, task.cnl = context.WithTimeout(task.ctx, timeOut)
 	}
-	defer task.cnl()                                       //函数结束，任务完成
 	ctx := context.WithValue(task.ctx, ThreadId, threadId) //线程id 值写入ctx
 	index := 1
 	if obj.threadStartCallBack != nil {
