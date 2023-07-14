@@ -242,7 +242,7 @@ func (obj *JyClient) readMain() {
 		}
 	}()
 	select {
-	case <-obj.client.Done():
+	case <-obj.client.Ctx().Done():
 		return
 	case <-doneChan:
 		return
@@ -252,7 +252,7 @@ func (obj *JyClient) run(dataMap map[string]any) (gjson.Result, error) {
 	obj.lock.Lock()
 	defer obj.lock.Unlock()
 	select {
-	case <-obj.client.Done():
+	case <-obj.client.Ctx().Done():
 		return gjson.Result{}, errors.New("client closed")
 	default:
 	}
@@ -267,11 +267,11 @@ func (obj *JyClient) run(dataMap map[string]any) (gjson.Result, error) {
 	select {
 	case data := <-obj.pip:
 		return tools.Any2json(data)
-	case <-obj.client.Done():
+	case <-obj.client.Ctx().Done():
 		if obj.client.err != nil {
 			return gjson.Result{}, obj.client.err
 		}
-		return gjson.Result{}, obj.client.ctx.Err()
+		return gjson.Result{}, obj.client.Ctx().Err()
 	}
 }
 
@@ -373,9 +373,4 @@ func (obj *Client) Close() {
 
 func (obj *Client) Ctx() context.Context {
 	return obj.ctx
-}
-
-// 运行是否结束的 chan
-func (obj *Client) Done() <-chan struct{} {
-	return obj.ctx.Done()
 }

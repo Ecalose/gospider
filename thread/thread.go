@@ -34,8 +34,7 @@ type Client[T any] struct {
 	maxThreadId  atomic.Int64
 	maxNum       int64
 
-	writeAfterTime *time.Timer
-	runAfterTime   *time.Timer
+	runAfterTime *time.Timer
 }
 
 type Task struct {
@@ -101,8 +100,7 @@ func NewBaseClient[T any](preCtx context.Context, maxNum int64, options ...BaseC
 		threadTokens: threadTokens,
 		dones:        dones,
 
-		writeAfterTime: time.NewTimer(0),
-		runAfterTime:   time.NewTimer(0),
+		runAfterTime: time.NewTimer(0),
 	}
 	if option.TaskCallBack != nil { //任务完成回调
 		ctx3, cnl3 := context.WithCancel(preCtx)
@@ -253,39 +251,15 @@ func (obj *Client[T]) Write(task *Task) (*Task, error) {
 		case obj.tasks <- task:
 			if obj.tasks2 != nil {
 				if err := obj.tasks2.Add(task); err != nil {
+					if obj.Err() != nil {
+						return task, obj.Err()
+					}
 					return task, err
 				}
 			}
 			return task, nil
 		case <-obj.threadTokens: //tasks 写不进去，线程池空闲，开启新的协程消费
 			go obj.runMain()
-		}
-		obj.writeAfterTime.Reset(time.Second)
-		select {
-		case <-obj.ctx2.Done(): //接到线程关闭通知
-			if obj.Err() != nil {
-				task.Error = obj.Err()
-			} else {
-				task.Error = ErrPoolClosed
-			}
-			task.cnl()
-			return task, task.Error
-		case <-obj.ctx.Done(): //接到线程关闭通知
-			if obj.Err() != nil {
-				task.Error = obj.Err()
-			} else {
-				task.Error = ErrPoolClosed
-			}
-			task.cnl()
-			return task, task.Error
-		case obj.tasks <- task:
-			if obj.tasks2 != nil {
-				if err := obj.tasks2.Add(task); err != nil {
-					return task, err
-				}
-			}
-			return task, nil
-		case <-obj.writeAfterTime.C:
 		}
 	}
 }
@@ -342,7 +316,6 @@ func (obj *Client[T]) run(task *Task, option T, threadId int64) {
 }
 
 func (obj *Client[T]) Join() error { //等待所有任务完成，并关闭pool
-	defer obj.writeAfterTime.Stop()
 	defer obj.runAfterTime.Stop()
 	obj.cnl()
 	if obj.tasks2 != nil {
@@ -367,7 +340,6 @@ func (obj *Client[T]) Join() error { //等待所有任务完成，并关闭pool
 }
 
 func (obj *Client[T]) Close() { //告诉所有协程，立即结束任务
-	defer obj.writeAfterTime.Stop()
 	defer obj.runAfterTime.Stop()
 	if obj.tasks2 != nil {
 		obj.tasks2.Close()

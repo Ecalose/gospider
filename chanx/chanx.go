@@ -114,8 +114,8 @@ func (obj *Client[T]) Close() { //立刻关闭
 	obj.cnl2()
 	obj.timer.Stop()
 }
-func (obj *Client[T]) Done() <-chan struct{} {
-	return obj.ctx2.Done()
+func (obj *Client[T]) Ctx() context.Context {
+	return obj.ctx2
 }
 func (obj *Client[T]) Len() int64 {
 	obj.lock.RLock()

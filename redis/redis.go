@@ -116,33 +116,8 @@ func (r *Client) Close() error {
 	return r.object.Close()
 }
 
+// 代理操作
 // 获取最新代理
-func (r *Client) GetProxy(key string) (string, error) {
-	vals, err := r.GetProxys(key)
-	if err != nil {
-		return "", err
-	}
-	return vals[0], nil
-}
-
-// 获取最新代理
-func (r *Client) GetProxyData(key string) (Proxy, error) {
-	vals, err := r.GetProxyDatas(key)
-	if err != nil {
-		return Proxy{}, err
-	}
-	return vals[0], nil
-}
-
-// 随机获取代理(有序)
-func (r *Client) GetOrderProxy(key string) (string, error) {
-	vals, err := r.GetOrderProxys(key)
-	if err != nil {
-		return "", err
-	}
-	return vals[0], nil
-}
-
 type Proxy struct {
 	Ip    string
 	Port  int64
@@ -150,6 +125,21 @@ type Proxy struct {
 	Usr   string
 	Pwd   string
 	Proxy string
+}
+
+func (r *Client) GetProxy(key string) (string, error) {
+	vals, err := r.GetProxys(key)
+	if err != nil {
+		return "", err
+	}
+	return vals[0], nil
+}
+func (r *Client) GetRandProxy(key string) (string, error) {
+	vals, err := r.GetProxys(key)
+	if err != nil {
+		return "", err
+	}
+	return vals[tools.RanInt(0, len(vals))], nil
 }
 
 // 获取所有代理

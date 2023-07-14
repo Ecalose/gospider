@@ -32,12 +32,13 @@ type Client struct {
 type Table struct {
 	object *mongo.Collection
 }
+
 type FindOption struct {
 	BatchSize       int32          // 服务器返回的每个批次中包含的最大文件数。
 	Limit           int64          //要返回的最大文档数
 	Timeout         time.Duration  //超时时间
 	NoCursorTimeout bool           //操作所创建的游标在一段时间不活动后不会超时
-	Show            any            //描述哪些字段将被包含在操作返回的文件中的文件
+	Show            map[string]int //描述哪些字段将被包含在操作返回的文件中的文件
 	Skip            int64          //在将文档添加到结果中之前要跳过的文档数量
 	Sort            map[string]int // 一个文件，指定返回文件的顺序
 	Await           bool           //oplog 是否阻塞等待数据
@@ -515,7 +516,7 @@ type ClearOption struct {
 	Thread         int64          //线程数量
 	Init           bool           //是否初始化
 	Oid            ObjectID       //起始id
-	Show           any            //展示的字段
+	Show           map[string]int //展示的字段
 	Desc           bool           //是否倒序
 	Filter         map[string]any //查询参数
 	Bar            bool           //是否开启进度条
@@ -526,7 +527,7 @@ type ClearOplogOption struct {
 	Thread    int64          //线程数量
 	Init      bool           //是否初始化
 	Oid       Timestamp      //起始id
-	Show      any            //展示的字段
+	Show      map[string]int //展示的字段
 	Filter    map[string]any //查询参数
 	BatchSize int32          //服务器每批次多少
 }
@@ -576,6 +577,9 @@ func (obj *Client) ClearOplog(preCctx context.Context, Func func(context.Context
 	pool := thread.NewClient(pre_ctx, clearOption.Thread, thread.ClientOption{
 		TaskCallBack: func(t *thread.Task) error {
 			cur++
+			if t.Error != nil {
+				return t.Error
+			}
 			if t.Result[2] != nil {
 				return t.Result[2].(error)
 			}
@@ -714,6 +718,9 @@ func (obj *Table) clearTable(preCtx context.Context, Func any, tag string, clear
 	bar := bar.NewClient(barTotal, bar.ClientOption{Cur: barCur})
 	pool := thread.NewClient(pre_ctx, clearOption.Thread, thread.ClientOption{
 		TaskCallBack: func(t *thread.Task) error {
+			if t.Error != nil {
+				return t.Error
+			}
 			if t.Result[1] != nil {
 				return t.Result[1].(error)
 			}

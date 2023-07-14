@@ -7,7 +7,6 @@ import (
 	"errors"
 	"fmt"
 	"net"
-	"net/url"
 	"strconv"
 
 	"gitee.com/baixudong/gospider/requests"
@@ -21,37 +20,24 @@ type Client struct {
 }
 
 type ClientOption struct {
-	BaseUrl string
-	Host    string
-	Port    int
-	Usr     string
-	Pwd     string
-	Ssl     bool
+	Host string
+	Port int
+	Usr  string
+	Pwd  string
+	Ssl  bool
 }
 
 func getBaseUrl(option ClientOption) (string, error) {
 	var baseUrl string
-	if option.BaseUrl == "" {
-		if option.Ssl {
-			baseUrl += "https://"
-		} else {
-			baseUrl += "http://"
-		}
-		if option.Usr != "" && option.Pwd != "" {
-			baseUrl += fmt.Sprintf("%s:%s@%s", option.Usr, option.Pwd, net.JoinHostPort(option.Host, strconv.Itoa(option.Port)))
-		} else {
-			baseUrl += net.JoinHostPort(option.Host, strconv.Itoa(option.Port))
-		}
+	if option.Ssl {
+		baseUrl += "https://"
 	} else {
-		uurl, err := url.Parse(option.BaseUrl)
-		if err != nil {
-			return "", err
-		}
-		if uurl.User.String() == "" {
-			baseUrl = fmt.Sprintf("%s://%s", uurl.Scheme, uurl.Host)
-		} else {
-			baseUrl = fmt.Sprintf("%s://%s:%s", uurl.Scheme, uurl.User.String(), uurl.Host)
-		}
+		baseUrl += "http://"
+	}
+	if option.Usr != "" && option.Pwd != "" {
+		baseUrl += fmt.Sprintf("%s:%s@%s", option.Usr, option.Pwd, net.JoinHostPort(option.Host, strconv.Itoa(option.Port)))
+	} else {
+		baseUrl += net.JoinHostPort(option.Host, strconv.Itoa(option.Port))
 	}
 	return baseUrl, nil
 }
