@@ -154,15 +154,15 @@ func (obj *Client[T]) runMain() {
 	}()
 	var runVal T
 	var err error
-	if obj.threadEndCallBack != nil { //处理回调
-		defer obj.threadEndCallBack(obj.ctx, runVal)
-	}
 	threadId := obj.maxThreadId.Add(1)  //获取线程id
 	if obj.threadStartCallBack != nil { //线程开始回调
 		runVal, err = obj.threadStartCallBack(obj.ctx, threadId)
 		if err != nil {
 			return
 		}
+	}
+	if obj.threadEndCallBack != nil { //处理回调
+		defer obj.threadEndCallBack(obj.ctx, runVal)
 	}
 	for {
 		obj.runAfterTime.Reset(time.Second * 30)
@@ -341,10 +341,10 @@ func (obj *Client[T]) Join() error { //等待所有任务完成，并关闭pool
 
 func (obj *Client[T]) Close() { //告诉所有协程，立即结束任务
 	defer obj.runAfterTime.Stop()
+	obj.cnl()
 	if obj.tasks2 != nil {
 		obj.tasks2.Close()
 	}
-	obj.cnl()
 	obj.cnl2()
 }
 func (obj *Client[T]) Err() error { //错误

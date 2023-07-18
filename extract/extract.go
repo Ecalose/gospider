@@ -253,7 +253,7 @@ func (obj *NodeA) Score() float64 {
 			break
 		}
 	}
-	parent_txt := obj.MainNode().Html()
+	parent_txt := obj.MainNode().String()
 	parent_txt += obj.MainNode().Text()
 	gTime := tools.GetTime(parent_txt)
 	if gTime != "" {

@@ -26,7 +26,7 @@ type ClientOption struct {
 	DnsCacheTime          time.Duration                                           //dns解析缓存时间60*30
 	AddrType              AddrType                                                //优先使用的addr 类型
 	GetAddrType           func(string) AddrType
-	Dns                   string              //dns
+	Dns                   net.IP              //dns
 	Ja3                   bool                //开启ja3
 	Ja3Spec               ja3.ClientHelloSpec //指定ja3Spec,使用ja3.CreateSpecWithStr 或者ja3.CreateSpecWithId 生成
 	H2Ja3                 bool                //开启h2指纹
@@ -38,9 +38,9 @@ type ClientOption struct {
 	DisUnZip    bool  //变比自动解压
 	TryNum      int64 //重试次数
 
-	OptionCallBack func(context.Context, *RequestOption) error //请求参数回调,用于对请求参数进行修改。返回error,中断重试请求,返回nil继续
-	ResultCallBack func(context.Context, *Response) error      //结果回调,用于对结果进行校验。返回nil，直接返回,返回err的话，如果有errCallBack 走errCallBack，没有继续try
-	ErrCallBack    func(context.Context, error) error          //错误回调,返回error,中断重试请求,返回nil继续
+	OptionCallBack func(context.Context, *Client, *RequestOption) error //请求参数回调,用于对请求参数进行修改。返回error,中断重试请求,返回nil继续
+	ResultCallBack func(context.Context, *Client, *Response) error      //结果回调,用于对结果进行校验。返回nil，直接返回,返回err的话，如果有errCallBack 走errCallBack，没有继续try
+	ErrCallBack    func(context.Context, *Client, error) error          //错误回调,返回error,中断重试请求,返回nil继续
 
 	Timeout time.Duration //请求超时时间
 	Headers any           //请求头
@@ -54,9 +54,9 @@ type Client struct {
 	disUnZip    bool  //变比自动解压
 	tryNum      int64 //重试次数
 
-	optionCallBack func(context.Context, *RequestOption) error //请求参数回调,用于对请求参数进行修改。返回error,中断重试请求,返回nil继续
-	resultCallBack func(context.Context, *Response) error      //结果回调,用于对结果进行校验。返回nil，直接返回,返回err的话，如果有errCallBack 走errCallBack，没有继续try
-	errCallBack    func(context.Context, error) error          //错误回调,返回error,中断重试请求,返回nil继续
+	optionCallBack func(context.Context, *Client, *RequestOption) error //请求参数回调,用于对请求参数进行修改。返回error,中断重试请求,返回nil继续
+	resultCallBack func(context.Context, *Client, *Response) error      //结果回调,用于对结果进行校验。返回nil，直接返回,返回err的话，如果有errCallBack 走errCallBack，没有继续try
+	errCallBack    func(context.Context, *Client, error) error          //错误回调,返回error,中断重试请求,返回nil继续
 
 	timeout time.Duration //请求超时时间
 	headers any           //请求头
@@ -104,6 +104,7 @@ func NewClient(preCtx context.Context, options ...ClientOption) (*Client, error)
 		Ja3Spec:             option.Ja3Spec,
 		TLSHandshakeTimeout: option.TLSHandshakeTimeout,
 		DnsCacheTime:        option.DnsCacheTime,
+		Dns:                 option.Dns,
 		GetProxy:            option.GetProxy,
 		Proxy:               option.Proxy,
 		KeepAlive:           option.KeepAlive,
@@ -161,12 +162,26 @@ func NewClient(preCtx context.Context, options ...ClientOption) (*Client, error)
 		},
 	}
 	var http2Upg *http2.Upg
+	// h3Round := &http3.RoundTripper{
+	// 	TLSClientConfig: &tls.Config{
+	// 		InsecureSkipVerify: true, // 忽略证书验证，仅用于测试目的
+	// 	},
+	// }
 	if option.H2Ja3 || option.H2Ja3Spec.IsSet() {
-		http2Upg = http2.NewUpg(transport, http2.UpgOption{H2Ja3Spec: option.H2Ja3Spec, DialTLSContext: dialClient.requestHttp2DialTlsContext})
+		http2Upg = http2.NewUpg(transport, http2.UpgOption{
+			H2Ja3Spec:             option.H2Ja3Spec,
+			DialTLSContext:        dialClient.requestHttp2DialTlsContext,
+			IdleConnTimeout:       option.TLSHandshakeTimeout,
+			TLSHandshakeTimeout:   option.TLSHandshakeTimeout,
+			ResponseHeaderTimeout: option.ResponseHeaderTimeout,
+		})
 		transport.TLSNextProto = map[string]func(authority string, c *tls.Conn) http.RoundTripper{
 			"h2": func(authority string, c *tls.Conn) http.RoundTripper {
 				return http2Upg.UpgradeFn(authority, c)
 			},
+			// "h3": func(authority string, c *tls.Conn) http.RoundTripper {
+			// 	return h3Round
+			// },
 		}
 	}
 	client.Transport = transport

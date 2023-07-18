@@ -21,6 +21,7 @@ import (
 type DialClient struct {
 	getProxy     func(ctx context.Context, url *url.URL) (string, error)
 	proxy        *url.URL
+	dns          *net.UDPAddr
 	dialer       *net.Dialer
 	dnsIpData    sync.Map
 	proxyLock    sync.RWMutex
@@ -31,7 +32,6 @@ type DialClient struct {
 	proxyJa3Spec ja3.ClientHelloSpec
 	ja3          bool //是否启用ja3
 	ja3Spec      ja3.ClientHelloSpec
-	resolver     *net.Resolver
 	ctx          context.Context
 }
 type msgClient struct {
@@ -55,6 +55,7 @@ type DialOption struct {
 	LocalAddr           *net.TCPAddr //使用本地网卡
 	AddrType            AddrType     //优先使用的地址类型,ipv4,ipv6 ,或自动选项
 	GetAddrType         func(string) AddrType
+	Dns                 net.IP
 	Ja3                 bool                //是否启用ja3
 	Ja3Spec             ja3.ClientHelloSpec //指定ja3Spec,使用ja3.CreateSpecWithStr 或者ja3.CreateSpecWithId 生成
 	ProxyJa3            bool                //代理是否启用ja3
@@ -104,6 +105,14 @@ func NewDail(ctx context.Context, option DialOption) (*DialClient, error) {
 	if option.LocalAddr != nil {
 		dialCli.dialer.LocalAddr = option.LocalAddr
 	}
+	if option.Dns != nil {
+		dialCli.dns = &net.UDPAddr{IP: option.Dns, Port: 53}
+		dialCli.dialer.Resolver = &net.Resolver{
+			PreferGo: true,
+			Dial:     dialCli.DnsDialContext,
+		}
+	}
+	// dialCli.dialer.SetMultipathTCP(true)
 	return dialCli, err
 }
 
@@ -160,7 +169,7 @@ func (obj *DialClient) loadHost(host string) (string, bool) {
 	msgDataAny, ok := obj.dnsIpData.Load(host)
 	if ok {
 		msgdata := msgDataAny.(msgClient)
-		if time.Now().Sub(msgdata.time) < obj.dnsTimeout {
+		if time.Since(msgdata.time) < obj.dnsTimeout {
 			return msgdata.host, true
 		}
 	}
@@ -315,7 +324,7 @@ func (obj *DialClient) lookupIPAddr(ctx context.Context, host string) (net.IP, e
 	} else if obj.getAddrType != nil {
 		addrType = int(obj.getAddrType(host))
 	}
-	ips, err := obj.resolver.LookupIPAddr(ctx, host)
+	ips, err := obj.dialer.Resolver.LookupIPAddr(ctx, host)
 	if err != nil {
 		return nil, err
 	}
@@ -334,6 +343,12 @@ func (obj *DialClient) lookupIPAddr(ctx context.Context, host string) (net.IP, e
 		}
 	}
 	return nil, errors.New("dns 解析host 失败")
+}
+func (obj *DialClient) DnsDialContext(ctx context.Context, netword string, addr string) (net.Conn, error) {
+	if obj.dns != nil {
+		return obj.dialer.DialContext(ctx, netword, obj.dns.String())
+	}
+	return obj.dialer.DialContext(ctx, netword, addr)
 }
 func (obj *DialClient) DialContext(ctx context.Context, netword string, addr string) (net.Conn, error) {
 	revHost, err := obj.AddrToIp(ctx, addr)
@@ -354,7 +369,7 @@ func (obj *DialClient) AddTls(ctx context.Context, conn net.Conn, host string, d
 		var utlsConn *utls.UConn
 		utlsConn, err = ja3.NewClient(ctx, conn, obj.ja3Spec, disHttp, tools.GetServerName(host))
 		if err != nil {
-			err = tools.WrapError(err, "dialClient AddTls ja3.NewClient错误")
+			err = tools.WrapError(err, "dialClient AddTls ja3.NewClient 错误")
 			return nil, err
 		}
 		if tlsConn, err = ja3.Utls2Tls(obj.ctx, ctx, utlsConn, host); err != nil {

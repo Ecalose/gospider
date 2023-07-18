@@ -18,6 +18,7 @@ type Client[T any] struct {
 	note  chan struct{}
 	timer time.Timer
 	len   int64
+	once  sync.Once
 }
 
 func NewClient[T any](preCtx context.Context) *Client[T] {
@@ -89,9 +90,8 @@ func (obj *Client[T]) run() {
 		obj.timer.Reset(time.Second * 5)
 		select {
 		case <-obj.ctx.Done():
-			if err := obj.send(); err != nil {
-				return
-			}
+			obj.send()
+			return
 		case <-obj.ctx2.Done():
 			return
 		case <-obj.note:
@@ -113,6 +113,7 @@ func (obj *Client[T]) Close() { //立刻关闭
 	obj.cnl()
 	obj.cnl2()
 	obj.timer.Stop()
+	obj.once.Do(func() { close(obj.pip) })
 }
 func (obj *Client[T]) Ctx() context.Context {
 	return obj.ctx2

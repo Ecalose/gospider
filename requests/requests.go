@@ -6,7 +6,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"io"
 
 	"net/http"
 	"net/url"
@@ -23,11 +22,12 @@ import (
 func ReadRequest(b *bufio.Reader) (*http.Request, error)
 
 type RequestDebug struct {
-	Proto  string
-	Url    *url.URL
-	Method string
-	Header http.Header
-	con    *bytes.Buffer
+	Proto   string
+	Url     *url.URL
+	Method  string
+	Header  http.Header
+	con     *bytes.Buffer
+	disBody bool //关闭body
 }
 type ResponseDebug struct {
 	Proto   string
@@ -39,30 +39,18 @@ type ResponseDebug struct {
 	Status  string
 }
 
-func (obj *RequestDebug) request() (*http.Request, error) {
+func (obj *RequestDebug) Request() (*http.Request, error) {
 	return ReadRequest(bufio.NewReader(bytes.NewBuffer(obj.con.Bytes())))
 }
 func (obj *RequestDebug) String() string {
 	return obj.con.String()
 }
-func (obj *RequestDebug) Bytes() []byte {
-	return obj.con.Bytes()
-}
-func (obj *RequestDebug) body() (io.ReadCloser, error) {
-	r, err := obj.request()
-	if err != nil {
-		return nil, err
-	}
-	return r.Body, err
-}
-func (obj *RequestDebug) Body() (*bytes.Buffer, error) {
-	body, err := obj.body()
-	if err != nil {
-		return nil, err
-	}
+func (obj *RequestDebug) HeadBuffer() *bytes.Buffer {
 	con := bytes.NewBuffer(nil)
-	_, err = io.Copy(con, body)
-	return con, err
+	con.WriteString(fmt.Sprintf("%s %s %s\r\n", obj.Method, obj.Url, obj.Proto))
+	obj.Header.Write(con)
+	con.WriteString("\r\n")
+	return con
 }
 func cloneRequest(r *http.Request, disBody bool) (*RequestDebug, error) {
 	request := new(RequestDebug)
@@ -70,51 +58,37 @@ func cloneRequest(r *http.Request, disBody bool) (*RequestDebug, error) {
 	request.Method = r.Method
 	request.Url = r.URL
 	request.Header = r.Header
+	request.disBody = disBody
 	var err error
-	request.con = bytes.NewBuffer(nil)
 	if !disBody {
+		request.con = bytes.NewBuffer(nil)
 		if err = r.Write(request.con); err != nil {
 			return request, err
 		}
-		r.Body, err = request.body()
+		req, err := request.Request()
+		if err != nil {
+			return nil, err
+		}
+		r.Body = req.Body
 	} else {
-		if _, err = request.con.WriteString(fmt.Sprintf("%s %s %s\r\n", r.Method, r.URL, r.Proto)); err != nil {
-			return request, err
-		}
-		if err = r.Header.Write(request.con); err != nil {
-			return request, err
-		}
-		if _, err = request.con.WriteString("\r\n"); err != nil {
-			return request, err
-		}
+		request.con = request.HeadBuffer()
 	}
 	return request, err
 }
 
-func (obj *ResponseDebug) response() (*http.Response, error) {
+func (obj *ResponseDebug) Response() (*http.Response, error) {
 	return http.ReadResponse(bufio.NewReader(bytes.NewBuffer(obj.con.Bytes())), obj.request)
 }
 func (obj *ResponseDebug) String() string {
 	return obj.con.String()
 }
-func (obj *ResponseDebug) Bytes() []byte {
-	return obj.con.Bytes()
-}
-func (obj *ResponseDebug) body() (io.ReadCloser, error) {
-	r, err := obj.response()
-	if err != nil {
-		return nil, err
-	}
-	return r.Body, err
-}
-func (obj *ResponseDebug) Body() (*bytes.Buffer, error) {
-	body, err := obj.body()
-	if err != nil {
-		return nil, err
-	}
+
+func (obj *ResponseDebug) HeadBuffer() *bytes.Buffer {
 	con := bytes.NewBuffer(nil)
-	_, err = io.Copy(con, body)
-	return con, err
+	con.WriteString(fmt.Sprintf("%s %s\r\n", obj.Proto, obj.Status))
+	obj.Header.Write(con)
+	con.WriteString("\r\n")
+	return con
 }
 func cloneResponse(r *http.Response, disBody bool) (*ResponseDebug, error) {
 	response := new(ResponseDebug)
@@ -127,27 +101,25 @@ func cloneResponse(r *http.Response, disBody bool) (*ResponseDebug, error) {
 	response.request = r.Request
 
 	var err error
-	response.con = bytes.NewBuffer(nil)
 	if !disBody {
+		response.con = bytes.NewBuffer(nil)
 		if err = r.Write(response.con); err != nil {
 			return response, err
 		}
-		r.Body, err = response.body()
+		rsp, err := response.Response()
+		if err != nil {
+			return nil, err
+		}
+		r.Body = rsp.Body
 	} else {
-		if _, err = response.con.WriteString(fmt.Sprintf("%s %s\r\n", r.Proto, r.Status)); err != nil {
-			return response, err
-		}
-		if err = r.Header.Write(response.con); err != nil {
-			return response, err
-		}
-		if _, err = response.con.WriteString("\r\n"); err != nil {
-			return response, err
-		}
+		response.con = response.HeadBuffer()
 	}
 	return response, err
 }
 
-const keyPrincipalID = "gospiderContextData"
+type keyPrincipal string
+
+const keyPrincipalID keyPrincipal = "gospiderContextData"
 
 var (
 	ErrFatal = errors.New("致命错误")
@@ -232,7 +204,7 @@ func (obj *Client) Request(preCtx context.Context, method string, href string, o
 				}
 			}
 			if option.OptionCallBack != nil {
-				if err = option.OptionCallBack(preCtx, &option); err != nil {
+				if err = option.OptionCallBack(preCtx, obj, &option); err != nil {
 					return
 				}
 			}
@@ -240,13 +212,13 @@ func (obj *Client) Request(preCtx context.Context, method string, href string, o
 			if err != nil { //有错误
 				if errors.Is(err, ErrFatal) { //致命错误直接返回
 					return
-				} else if option.ErrCallBack != nil && option.ErrCallBack(preCtx, err) != nil { //不是致命错误，有错误回调,有错误,直接返回
+				} else if option.ErrCallBack != nil && option.ErrCallBack(preCtx, obj, err) != nil { //不是致命错误，有错误回调,有错误,直接返回
 					return
 				}
 			} else if option.ResultCallBack == nil { //没有错误，且没有回调，直接返回
 				return
-			} else if err = option.ResultCallBack(preCtx, resp); err != nil { //没有错误，有回调，回调错误
-				if option.ErrCallBack != nil && option.ErrCallBack(preCtx, err) != nil { //有错误回调,有错误直接返回
+			} else if err = option.ResultCallBack(preCtx, obj, resp); err != nil { //没有错误，有回调，回调错误
+				if option.ErrCallBack != nil && option.ErrCallBack(preCtx, obj, err) != nil { //有错误回调,有错误直接返回
 					return
 				}
 			} else { //没有错误，有回调，没有回调错误，直接返回

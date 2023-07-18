@@ -40,9 +40,9 @@ type RequestOption struct {
 	DisProxy    bool           //是否关闭代理,强制关闭代理
 	TryNum      int64          //重试次数
 
-	OptionCallBack func(context.Context, *RequestOption) error //请求参数回调,用于对请求参数进行修改。返回error,中断重试请求,返回nil继续
-	ResultCallBack func(context.Context, *Response) error      //结果回调,用于对结果进行校验。返回nil，直接返回,返回err的话，如果有errCallBack 走errCallBack，没有继续try
-	ErrCallBack    func(context.Context, error) error          //错误回调,返回error,中断重试请求,返回nil继续
+	OptionCallBack func(context.Context, *Client, *RequestOption) error //请求参数回调,用于对请求参数进行修改。返回error,中断重试请求,返回nil继续
+	ResultCallBack func(context.Context, *Client, *Response) error      //结果回调,用于对结果进行校验。返回nil，直接返回,返回err的话，如果有errCallBack 走errCallBack，没有继续try
+	ErrCallBack    func(context.Context, *Client, error) error          //错误回调,返回error,中断重试请求,返回nil继续
 
 	RequestCallBack  func(context.Context, *RequestDebug) error  //request回调,用于定位bug,正常请求不要设置这个函数
 	ResponseCallBack func(context.Context, *ResponseDebug) error //response回调,用于定位bug,正常请求不要设置这个函数

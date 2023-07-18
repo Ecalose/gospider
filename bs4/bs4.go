@@ -213,7 +213,7 @@ func (obj *Client) Contents(elections ...string) []*Client {
 }
 
 // 返回所有节点的字符串
-func (obj *Client) Strings() []string {
+func (obj *Client) Texts() []string {
 	results := []string{}
 	for _, kk := range obj.Contents() {
 		results = append(results, kk.Text())
@@ -326,11 +326,8 @@ func (obj *Client) Name(str ...string) string {
 	return ""
 }
 
-// 返回节点的dom 字符串或设置节点的dom
-func (obj *Client) Html(content ...string) string {
-	if len(content) > 0 {
-		obj.setHtml(content[0])
-	}
+// 返回节点的dom 字符串
+func (obj *Client) String() string {
 	html, _ := goquery.OuterHtml(obj.object)
 	return html
 }
@@ -341,7 +338,9 @@ func newNode(name string, attrs map[string]string, content string) string {
 	}
 	return fmt.Sprintf("<%s%s>%s</%s>", name, attrDom, content, name)
 }
-func (obj *Client) setHtml(content string) {
+
+// 设置节点的dom
+func (obj *Client) SetHtml(content string) {
 	obj.object.SetHtml(content)
 }
 

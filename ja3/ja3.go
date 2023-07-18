@@ -266,7 +266,6 @@ func Utls2Tls(preCtx, ctx context.Context, utlsConn *utls.UConn, host string) (*
 		}()
 		_, err = io.Copy(tlsClientConn, utlsConn)
 	}()
-
 	if err = tlsConn.HandshakeContext(ctx); err != nil {
 		tlsClientConn.Close()
 		utlsConn.Close()
@@ -587,7 +586,7 @@ func createCiphers(ciphers []string) ([]uint16, error) {
 }
 func createCurves(curves []string, extensions []string) (curvesExtension utls.TLSExtension, err error) {
 	if !slices.Contains(extensions, "10") {
-		err = errors.New("Extensions 缺少ellipticCurves 扩展,检查ja3 字符串是否合法")
+		return curvesExtension, errors.New("extensions 缺少ellipticCurves 扩展,检查ja3 字符串是否合法")
 	}
 	curveIds := []utls.CurveID{utls.GREASE_PLACEHOLDER}
 	for _, val := range curves {
@@ -601,7 +600,7 @@ func createCurves(curves []string, extensions []string) (curvesExtension utls.TL
 }
 func createPointFormats(points []string, extensions []string) (curvesExtension utls.TLSExtension, err error) {
 	if !slices.Contains(extensions, "11") {
-		err = errors.New("Extensions 缺少pointFormats 扩展,检查ja3 字符串是否合法")
+		return curvesExtension, errors.New("extensions 缺少pointFormats 扩展,检查ja3 字符串是否合法")
 	}
 	supportedPoints := []uint8{}
 	for _, val := range points {
@@ -635,7 +634,6 @@ func createExtensions(extensions []string, tlsExtension, curvesExtension, pointE
 			if ext == nil {
 				if isGREASEUint16(extensionId) {
 					allExtensions = append(allExtensions, &utls.UtlsGREASEExtension{})
-				} else {
 				}
 				allExtensions = append(allExtensions, &utls.GenericExtension{Id: extensionId})
 			} else {
@@ -779,7 +777,9 @@ func (obj Ja3ContextData) Verify() (string, bool) {
 	return VerifyWithMd5(obj.Md5())
 }
 
-const keyPrincipalID = "Ja3ContextData"
+type keyPrincipal = string
+
+const keyPrincipalID keyPrincipal = "Ja3ContextData"
 
 func ConnContext(ctx context.Context, c net.Conn) context.Context {
 	return context.WithValue(ctx, keyPrincipalID, &Ja3ContextData{})

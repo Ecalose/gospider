@@ -10,13 +10,13 @@ import (
 )
 
 type Conn struct {
-	reader  <-chan []byte
-	writer  chan<- []byte
-	readerI <-chan int
-	writerI chan<- int
-	lock    sync.Mutex
-	ctx     context.Context
-	cnl     context.CancelFunc
+	reader    <-chan []byte
+	writer    chan<- []byte
+	readerI   <-chan int
+	writerI   chan<- int
+	writeLock sync.Mutex
+	ctx       context.Context
+	cnl       context.CancelFunc
 
 	readTimer   time.Timer
 	writerTimer time.Timer
@@ -58,8 +58,8 @@ func (obj *Conn) Write(b []byte) (n int, err error) {
 			obj.Close()
 		}
 	}()
-	obj.lock.Lock()
-	defer obj.lock.Unlock()
+	obj.writeLock.Lock()
+	defer obj.writeLock.Unlock()
 	for once := true; once || len(b) > 0; once = false {
 		select {
 		case <-obj.writerTimer.C:
