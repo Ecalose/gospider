@@ -729,30 +729,39 @@ func WrapError(err error, val ...any) error {
 }
 
 func CopyWitchContext(ctx context.Context, writer io.Writer, reader io.Reader) (err error) {
-	if ctx == nil {
-		_, err = io.Copy(writer, reader)
-		if err != nil && errors.Is(err, io.ErrUnexpectedEOF) {
-			err = nil
-		}
-		return
-	}
-	p := make(chan struct{})
-	go func() {
-		defer func() {
-			if recErr := recover(); recErr != nil && err == nil {
-				err = errors.New(fmt.Sprint(recErr))
-			}
-			close(p)
-		}()
-		_, err = io.Copy(writer, reader)
+	defer func() {
 		if err != nil && errors.Is(err, io.ErrUnexpectedEOF) {
 			err = nil
 		}
 	}()
+	if ctx == nil {
+		defer func() {
+			if recErr := recover(); recErr != nil && err == nil {
+				err, _ = recErr.(error)
+			}
+		}()
+		_, err = io.Copy(writer, reader)
+		return
+	}
+	select {
+	case <-ctx.Done():
+		return ctx.Err()
+	default:
+	}
+	done := make(chan struct{})
+	go func() {
+		defer func() {
+			if recErr := recover(); recErr != nil && err == nil {
+				err, _ = recErr.(error)
+			}
+			close(done)
+		}()
+		_, err = io.Copy(writer, reader)
+	}()
 	select {
 	case <-ctx.Done():
 		err = ctx.Err()
-	case <-p:
+	case <-done:
 	}
 	return
 }
@@ -998,9 +1007,10 @@ func ImgDiffer(c, c2 []byte) (float64, error) {
 	return score, nil
 }
 func Signal(preCtx context.Context, fun func()) {
-	ch := make(chan os.Signal)
-	signal.Notify(ch, syscall.SIGHUP, syscall.SIGINT, syscall.SIGQUIT, syscall.SIGILL, syscall.SIGTRAP,
-		syscall.SIGABRT, syscall.SIGBUS, syscall.SIGFPE, syscall.SIGKILL, syscall.SIGSEGV, syscall.SIGPIPE,
+	ch := make(chan os.Signal, 1)
+	signal.Notify(ch,
+		syscall.SIGHUP, syscall.SIGINT, syscall.SIGQUIT, syscall.SIGILL, syscall.SIGTRAP,
+		syscall.SIGABRT, syscall.SIGBUS, syscall.SIGFPE, syscall.SIGSEGV, syscall.SIGPIPE,
 		syscall.SIGALRM, syscall.SIGTERM)
 	select {
 	case <-preCtx.Done():

@@ -302,7 +302,7 @@ func (obj *Response) barRead() (*bytes.Buffer, error) {
 		bar:  bar.NewClient(obj.response.ContentLength),
 		body: bytes.NewBuffer(nil),
 	}
-	err := tools.CopyWitchContext(obj.response.Request.Context(), barData, obj.response.Body)
+	err := tools.CopyWitchContext(obj.response.Request.Context(), barData, obj)
 	if err != nil {
 		return nil, err
 	}
@@ -312,12 +312,27 @@ func (obj *Response) defaultDecode() bool {
 	return strings.Contains(obj.ContentType(), "html")
 }
 
-func (obj *Response) Read(con []byte) (int, error) { //读取body
+func (obj *Response) Read(con []byte) (i int, err error) { //读取body
 	select {
 	case <-obj.ctx.Done():
 		return 0, obj.ctx.Err()
 	default:
-		return obj.response.Body.Read(con)
+	}
+	done := make(chan struct{})
+	go func() {
+		defer func() {
+			if recErr := recover(); recErr != nil && err == nil {
+				err, _ = recErr.(error)
+			}
+			close(done)
+		}()
+		i, err = obj.response.Body.Read(con)
+	}()
+	select {
+	case <-obj.ctx.Done():
+		return 0, obj.ctx.Err()
+	case <-done:
+		return
 	}
 }
 
@@ -329,7 +344,7 @@ func (obj *Response) read() error { //读取body,对body 解压，解码操作
 		bBody, err = obj.barRead()
 	} else {
 		bBody = bytes.NewBuffer(nil)
-		err = tools.CopyWitchContext(obj.response.Request.Context(), bBody, obj.response.Body)
+		err = tools.CopyWitchContext(obj.response.Request.Context(), bBody, obj)
 	}
 	if err != nil {
 		return errors.New("response 读取内容 错误: " + err.Error())
@@ -360,7 +375,7 @@ func (obj *Response) Close() error {
 		obj.webSocket.Close("close")
 	}
 	if obj.response != nil && obj.response.Body != nil {
-		tools.CopyWitchContext(obj.ctx, io.Discard, obj.response.Body)
+		tools.CopyWitchContext(obj.ctx, io.Discard, obj)
 		return obj.response.Body.Close()
 	}
 	return nil
