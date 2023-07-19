@@ -12,12 +12,11 @@ import (
 	"gitee.com/baixudong/gospider/chanx"
 )
 
-type DefaultClient = Client[bool]
-
-type Client[T any] struct {
-	debug               bool                                    //是否显示调试信息
-	threadStartCallBack func(context.Context, int64) (T, error) //每一个线程开始时，根据线程id,创建一个局部对象
-	threadEndCallBack   func(context.Context, T) error          //线程被消毁时的回调,再这里可以安全的释放局部对象资源
+type Client struct {
+	debug             bool                                      //是否显示调试信息
+	createThreadValue func(context.Context, int64) (any, error) //每一个线程开始时，根据线程id,创建一个局部对象
+	clearThreadValue  func(context.Context, any) error          //线程被消毁时的回调,再这里可以安全的释放局部对象资源
+	taskDoneCallBack  func(*Task) error                         //任务回调
 
 	ctx2         context.Context      //控制各个协程
 	cnl2         context.CancelFunc   //控制各个协程
@@ -29,7 +28,6 @@ type Client[T any] struct {
 	threadTokens chan struct{}        //线程可用队列
 	dones        chan struct{}        //任务完成通知队列
 	tasks2       *chanx.Client[*Task] //chanx 的队列任务
-	taskCallBack func(*Task) error    //任务回调
 	err          error
 	maxThreadId  atomic.Int64
 	maxNum       int64
@@ -52,26 +50,21 @@ func (obj *Task) Done() <-chan struct{} {
 	return obj.ctx.Done()
 }
 
-type BaseClientOption[T any] struct {
-	Debug               bool                                    //是否显示调试信息
-	ThreadStartCallBack func(context.Context, int64) (T, error) //每一个线程开始时，根据线程id,创建一个局部对象
-	ThreadEndCallBack   func(context.Context, T) error          //线程被消毁时的回调,再这里可以安全的释放局部对象资源
-	TaskCallBack        func(*Task) error                       //有序的任务完成回调
-}
-type ClientOption = BaseClientOption[bool]
-
-func NewClient(preCtx context.Context, maxNum int64, options ...ClientOption) *DefaultClient {
-	return NewBaseClient(preCtx, maxNum, options...)
+type ClientOption struct {
+	Debug             bool                                      //是否显示调试信息
+	CreateThreadValue func(context.Context, int64) (any, error) //每一个线程开始时，根据线程id,创建一个局部对象
+	ClearThreadValue  func(context.Context, any) error          //线程被消毁时的回调,再这里可以安全的释放局部对象资源
+	TaskDoneCallBack  func(*Task) error                         //有序的任务完成回调
 }
 
-func NewBaseClient[T any](preCtx context.Context, maxNum int64, options ...BaseClientOption[T]) *Client[T] {
+func NewClient(preCtx context.Context, maxNum int64, options ...ClientOption) *Client {
 	if preCtx == nil {
 		preCtx = context.TODO()
 	}
 	if maxNum < 1 {
 		maxNum = 1
 	}
-	var option BaseClientOption[T]
+	var option ClientOption
 	if len(options) > 0 {
 		option = options[0]
 	}
@@ -85,11 +78,11 @@ func NewBaseClient[T any](preCtx context.Context, maxNum int64, options ...BaseC
 	for i := 0; i < int(maxNum); i++ {
 		threadTokens <- struct{}{}
 	}
-	pool := &Client[T]{
-		debug:               option.Debug,               //是否显示调试信息
-		threadStartCallBack: option.ThreadStartCallBack, //每一个线程开始时，根据线程id,创建一个局部对象
-		threadEndCallBack:   option.ThreadEndCallBack,   //线程被消毁时的回调,再这里可以安全的释放局部对象资源
-		taskCallBack:        option.TaskCallBack,        //任务回调
+	pool := &Client{
+		debug:             option.Debug,             //是否显示调试信息
+		createThreadValue: option.CreateThreadValue, //每一个线程开始时，根据线程id,创建一个局部对象
+		clearThreadValue:  option.ClearThreadValue,  //线程被消毁时的回调,再这里可以安全的释放局部对象资源
+		taskDoneCallBack:  option.TaskDoneCallBack,  //任务回调
 
 		maxNum:       maxNum,
 		ctx2:         ctx2,
@@ -102,7 +95,7 @@ func NewBaseClient[T any](preCtx context.Context, maxNum int64, options ...BaseC
 
 		runAfterTime: time.NewTimer(0),
 	}
-	if option.TaskCallBack != nil { //任务完成回调
+	if option.TaskDoneCallBack != nil { //任务完成回调
 		ctx3, cnl3 := context.WithCancel(preCtx)
 		pool.tasks2 = chanx.NewClient[*Task](preCtx)
 		pool.ctx3 = ctx3
@@ -111,7 +104,7 @@ func NewBaseClient[T any](preCtx context.Context, maxNum int64, options ...BaseC
 	}
 	return pool
 }
-func (obj *Client[T]) taskCallBackMain() {
+func (obj *Client) taskCallBackMain() {
 	defer obj.cnl3()
 	defer obj.Close()
 	defer obj.tasks2.Close()
@@ -127,13 +120,13 @@ func (obj *Client[T]) taskCallBackMain() {
 		if obj.err != nil { //任务报错，开始关闭线程
 			return
 		}
-		if err := obj.taskCallBack(task); err != nil { //任务回调报错，关闭线程
+		if err := obj.taskDoneCallBack(task); err != nil { //任务回调报错，关闭线程
 			obj.err = err
 			return
 		}
 	}
 }
-func (obj *Client[T]) runMain() {
+func (obj *Client) runMain() {
 	defer func() {
 		if err := recover(); err != nil {
 			if obj.err == nil {
@@ -152,17 +145,17 @@ func (obj *Client[T]) runMain() {
 		default:
 		}
 	}()
-	var runVal T
+	var runVal any
 	var err error
-	threadId := obj.maxThreadId.Add(1)  //获取线程id
-	if obj.threadStartCallBack != nil { //线程开始回调
-		runVal, err = obj.threadStartCallBack(obj.ctx, threadId)
+	threadId := obj.maxThreadId.Add(1) //获取线程id
+	if obj.createThreadValue != nil {  //线程开始回调
+		runVal, err = obj.createThreadValue(obj.ctx, threadId)
 		if err != nil {
 			return
 		}
 	}
-	if obj.threadEndCallBack != nil { //处理回调
-		defer obj.threadEndCallBack(obj.ctx, runVal)
+	if obj.clearThreadValue != nil && runVal != nil { //处理回调
+		defer obj.clearThreadValue(obj.ctx, runVal)
 	}
 	for {
 		obj.runAfterTime.Reset(time.Second * 30)
@@ -188,15 +181,15 @@ func (obj *Client[T]) runMain() {
 
 var ErrPoolClosed = errors.New("pool closed")
 
-func (obj *Client[T]) verify(fun any, args []any) error {
+func (obj *Client) verify(fun any, args []any) error {
 	if fun == nil {
 		return errors.New("not func")
 	}
 	typeOfFun := reflect.TypeOf(fun)
 	index := 1
-	if obj.threadStartCallBack != nil {
+	if obj.createThreadValue != nil {
 		index = 2
-		var tmpVal T
+		var tmpVal any
 		if reflect.TypeOf(tmpVal).String() != typeOfFun.In(1).String() {
 			return fmt.Errorf("two params not %T", tmpVal)
 		}
@@ -223,7 +216,7 @@ func (obj *Client[T]) verify(fun any, args []any) error {
 }
 
 // 创建task
-func (obj *Client[T]) Write(task *Task) (*Task, error) {
+func (obj *Client) Write(task *Task) (*Task, error) {
 	task.ctx, task.cnl = context.WithCancel(obj.ctx2)        //设置任务ctx
 	if err := obj.verify(task.Func, task.Args); err != nil { //验证参数
 		task.Error = err
@@ -279,7 +272,7 @@ func GetThreadId(ctx context.Context) int64 { //获取线程id，获取失败返
 	}
 	return 0
 }
-func (obj *Client[T]) run(task *Task, option T, threadId int64) {
+func (obj *Client) run(task *Task, option any, threadId int64) {
 	defer task.cnl() //函数结束，任务完成
 	defer func() {
 		if r := recover(); r != nil {
@@ -295,12 +288,12 @@ func (obj *Client[T]) run(task *Task, option T, threadId int64) {
 	}
 	ctx := context.WithValue(task.ctx, ThreadId, threadId) //线程id 值写入ctx
 	index := 1
-	if obj.threadStartCallBack != nil {
+	if obj.createThreadValue != nil {
 		index = 2
 	}
 	params := make([]reflect.Value, len(task.Args)+index)
 	params[0] = reflect.ValueOf(ctx)
-	if obj.threadStartCallBack != nil {
+	if obj.createThreadValue != nil {
 		params[1] = reflect.ValueOf(option)
 	}
 	for k, param := range task.Args {
@@ -315,7 +308,7 @@ func (obj *Client[T]) run(task *Task, option T, threadId int64) {
 	}
 }
 
-func (obj *Client[T]) Join() error { //等待所有任务完成，并关闭pool
+func (obj *Client) Join() error { //等待所有任务完成，并关闭pool
 	defer obj.runAfterTime.Stop()
 	obj.cnl()
 	if obj.tasks2 != nil {
@@ -339,7 +332,7 @@ func (obj *Client[T]) Join() error { //等待所有任务完成，并关闭pool
 	}
 }
 
-func (obj *Client[T]) Close() { //告诉所有协程，立即结束任务
+func (obj *Client) Close() { //告诉所有协程，立即结束任务
 	defer obj.runAfterTime.Stop()
 	obj.cnl()
 	if obj.tasks2 != nil {
@@ -347,16 +340,16 @@ func (obj *Client[T]) Close() { //告诉所有协程，立即结束任务
 	}
 	obj.cnl2()
 }
-func (obj *Client[T]) Err() error { //错误
+func (obj *Client) Err() error { //错误
 	return obj.err
 }
-func (obj *Client[T]) Done() <-chan struct{} { //所有任务执行完毕
+func (obj *Client) Done() <-chan struct{} { //所有任务执行完毕
 	return obj.ctx2.Done()
 }
-func (obj *Client[T]) ThreadSize() int64 { //创建的协程数量
+func (obj *Client) ThreadSize() int64 { //创建的协程数量
 	return obj.maxNum - int64(len(obj.threadTokens))
 }
-func (obj *Client[T]) Empty() bool { //任务是否为空
+func (obj *Client) Empty() bool { //任务是否为空
 	if obj.ThreadSize() <= 0 && len(obj.tasks) == 0 {
 		return true
 	}

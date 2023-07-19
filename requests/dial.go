@@ -387,16 +387,6 @@ func (obj *DialClient) AddTls(ctx context.Context, conn net.Conn, host string, d
 	}
 	return tlsConn, err
 }
-
-//	func (obj *DialClient) newPwdConn(conn net.Conn, proxyUrl *url.URL) net.Conn {
-//		if password, ok := proxyUrl.User.Password(); ok {
-//			return &pwdConn{
-//				rawConn:            conn,
-//				proxyAuthorization: tools.Base64Encode(proxyUrl.User.Username() + ":" + password),
-//			}
-//		}
-//		return conn
-//	}
 func (obj *DialClient) Socks5Proxy(ctx context.Context, network string, addr string, proxyUrl *url.URL) (conn net.Conn, err error) {
 	defer func() {
 		if err != nil && conn != nil {
@@ -473,70 +463,6 @@ func (obj *DialClient) clientVerifyHttps(ctx context.Context, scheme string, pro
 	}
 	return
 }
-
-// func (obj *DialClient) DialContextWithProxy(ctx context.Context, netword string, scheme string, addr string, host string, proxyUrl *url.URL) (net.Conn, error) {
-// 	if proxyUrl == nil {
-// 		return obj.DialContext(ctx, netword, addr)
-// 	}
-// 	if proxyUrl.Port() == "" {
-// 		if proxyUrl.Scheme == "http" {
-// 			proxyUrl.Host = net.JoinHostPort(proxyUrl.Hostname(), "80")
-// 		} else if proxyUrl.Scheme == "https" {
-// 			proxyUrl.Host = net.JoinHostPort(proxyUrl.Hostname(), "443")
-// 		}
-// 	}
-// 	switch scheme {
-// 	case "http":
-// 		switch proxyUrl.Scheme {
-// 		case "http":
-// 			conn, err := obj.DialContext(ctx, netword, net.JoinHostPort(proxyUrl.Hostname(), proxyUrl.Port()))
-// 			if err == nil && proxyUrl.User != nil {
-// 				return obj.newPwdConn(conn, proxyUrl), err
-// 			}
-// 			return conn, err
-// 		case "https":
-// 			conn, err := obj.DialContext(ctx, netword, net.JoinHostPort(proxyUrl.Hostname(), proxyUrl.Port()))
-// 			if err != nil {
-// 				return conn, err
-// 			}
-// 			tlsConn, err := obj.AddProxyTls(ctx, conn, proxyUrl.Host)
-// 			if err == nil && proxyUrl.User != nil {
-// 				return obj.newPwdConn(tlsConn, proxyUrl), err
-// 			}
-// 			return tlsConn, err
-// 		case "socks5":
-// 			return obj.Socks5Proxy(ctx, netword, addr, proxyUrl)
-// 		default:
-// 			return nil, errors.New("proxyUrl Scheme error")
-// 		}
-// 	case "https":
-// 		switch proxyUrl.Scheme {
-// 		case "http":
-// 			conn, err := obj.DialContext(ctx, netword, net.JoinHostPort(proxyUrl.Hostname(), proxyUrl.Port()))
-// 			if err != nil {
-// 				return conn, err
-// 			}
-// 			return conn, obj.clientVerifyHttps(ctx, proxyUrl, addr, host, conn)
-// 		case "https":
-// 			conn, err := obj.DialContext(ctx, netword, net.JoinHostPort(proxyUrl.Hostname(), proxyUrl.Port()))
-// 			if err != nil {
-// 				return conn, err
-// 			}
-// 			tlsConn, err := obj.AddProxyTls(ctx, conn, proxyUrl.Host)
-// 			if err == nil {
-// 				return tlsConn, obj.clientVerifyHttps(ctx, proxyUrl, addr, host, tlsConn)
-// 			}
-// 			return tlsConn, err
-// 		case "socks5":
-// 			return obj.Socks5Proxy(ctx, netword, addr, proxyUrl)
-// 		default:
-// 			return nil, errors.New("proxyUrl Scheme error")
-// 		}
-// 	default:
-// 		return nil, errors.New("url Scheme error")
-// 	}
-// }
-
 func (obj *DialClient) DialContextWithProxy(ctx context.Context, netword string, scheme string, addr string, host string, proxyUrl *url.URL) (net.Conn, error) {
 	if proxyUrl == nil {
 		return obj.DialContext(ctx, netword, addr)

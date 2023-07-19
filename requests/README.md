@@ -1,5 +1,5 @@
 # 功能概述
-- cookies 开关，连接池开关，http2，ja3
+- cookies 开关，连接池，http2，ja3
 - 自实现socks五,http代理,https代理
 - 自动解压缩,解码
 - dns缓存
