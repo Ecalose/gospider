@@ -138,6 +138,56 @@ type reqCtxData struct {
 	responseCallBack func(context.Context, *ResponseDebug) error
 }
 
+func Get(preCtx context.Context, href string, options ...RequestOption) (*Response, error) {
+	client, _ := NewClient(preCtx)
+	defer client.Close()
+	return client.Request(preCtx, http.MethodGet, href, options...)
+}
+func Head(preCtx context.Context, href string, options ...RequestOption) (*Response, error) {
+	client, _ := NewClient(preCtx)
+	defer client.Close()
+	return client.Request(preCtx, http.MethodHead, href, options...)
+}
+func Post(preCtx context.Context, href string, options ...RequestOption) (*Response, error) {
+	client, _ := NewClient(preCtx)
+	defer client.Close()
+	return client.Request(preCtx, http.MethodPost, href, options...)
+}
+func Put(preCtx context.Context, href string, options ...RequestOption) (*Response, error) {
+	client, _ := NewClient(preCtx)
+	defer client.Close()
+	return client.Request(preCtx, http.MethodPut, href, options...)
+}
+func Patch(preCtx context.Context, href string, options ...RequestOption) (*Response, error) {
+	client, _ := NewClient(preCtx)
+	defer client.Close()
+	return client.Request(preCtx, http.MethodPatch, href, options...)
+}
+func Delete(preCtx context.Context, href string, options ...RequestOption) (*Response, error) {
+	client, _ := NewClient(preCtx)
+	defer client.Close()
+	return client.Request(preCtx, http.MethodDelete, href, options...)
+}
+func Connect(preCtx context.Context, href string, options ...RequestOption) (*Response, error) {
+	client, _ := NewClient(preCtx)
+	defer client.Close()
+	return client.Request(preCtx, http.MethodConnect, href, options...)
+}
+func Options(preCtx context.Context, href string, options ...RequestOption) (*Response, error) {
+	client, _ := NewClient(preCtx)
+	defer client.Close()
+	return client.Request(preCtx, http.MethodOptions, href, options...)
+}
+func Trace(preCtx context.Context, href string, options ...RequestOption) (*Response, error) {
+	client, _ := NewClient(preCtx)
+	defer client.Close()
+	return client.Request(preCtx, http.MethodTrace, href, options...)
+}
+func Request(preCtx context.Context, method string, href string, options ...RequestOption) (*Response, error) {
+	client, _ := NewClient(preCtx)
+	defer client.Close()
+	return client.Request(preCtx, method, href, options...)
+}
 func (obj *Client) Get(preCtx context.Context, href string, options ...RequestOption) (*Response, error) {
 	return obj.Request(preCtx, http.MethodGet, href, options...)
 }

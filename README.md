@@ -35,10 +35,6 @@ https://github.com/baixudong007/gospider
 [chromedp](https://github.com/chromedp/chromedp)|golang中操控浏览器最好的一个
 
 
-
-
-
-
-
-# 如果二维码没有及时更新可以添加个人微信 gospider007 (备注gospider入群)
+# 有问题和建议可以加微信群交流讨论： (备注gospider入群)
 ![](im.jpg)
+
