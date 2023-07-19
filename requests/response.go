@@ -330,6 +330,7 @@ func (obj *Response) Read(con []byte) (i int, err error) { //读取body
 	}()
 	select {
 	case <-obj.ctx.Done():
+		obj.response.Body.Close()
 		return 0, obj.ctx.Err()
 	case <-done:
 		return
